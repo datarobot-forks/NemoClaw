@@ -2414,7 +2414,15 @@ async function setupNim(gpu) {
           }
         } else if (selected.key === "datarobot") {
           const endpointInput = isNonInteractive()
-            ? (process.env.DATAROBOT_ENDPOINT || process.env.NEMOCLAW_ENDPOINT_URL || "").trim()
+            ? (() => {
+                if (process.env.DATAROBOT_DEPLOYMENT_ENDPOINT) {
+                  return process.env.DATAROBOT_DEPLOYMENT_ENDPOINT.trim();
+                }
+                if (process.env.DATAROBOT_ENDPOINT) {
+                  return `${process.env.DATAROBOT_ENDPOINT.trim().replace(/\/$/, "")}/genai/llmgw`;
+                }
+                return (process.env.NEMOCLAW_ENDPOINT_URL || "").trim();
+              })()
             : await prompt(
                 "  DataRobot LLM gateway URL (e.g., https://app.datarobot.com/api/v2/genai/llmgw): ",
               );
