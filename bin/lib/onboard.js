@@ -163,6 +163,18 @@ const REMOTE_PROVIDER_CONFIG = {
     defaultModel: "",
     skipVerify: true,
   },
+  datarobot: {
+    label: "DataRobot",
+    providerName: "datarobot-endpoint",
+    providerType: "openai",
+    credentialEnv: "DATAROBOT_API_KEY",
+    endpointUrl: "",
+    helpUrl: null,
+    modelMode: "input",
+    defaultModel: "",
+    skipVerify: true,
+    stripVersionPrefix: true,
+  },
 };
 
 const REMOTE_MODEL_OPTIONS = {
@@ -737,7 +749,7 @@ async function promptValidationRecovery(label, recovery, credentialEnv = null, h
   return "selection";
 }
 
-function buildProviderArgs(action, name, type, credentialEnv, baseUrl) {
+function buildProviderArgs(action, name, type, credentialEnv, baseUrl, stripVersionPrefix) {
   const args =
     action === "create"
       ? ["provider", "create", "--name", name, "--type", type, "--credential", credentialEnv]
@@ -747,11 +759,14 @@ function buildProviderArgs(action, name, type, credentialEnv, baseUrl) {
   } else if (baseUrl && type === "anthropic") {
     args.push("--config", `ANTHROPIC_BASE_URL=${baseUrl}`);
   }
+  if (stripVersionPrefix && type === "openai") {
+    args.push("--config", "STRIP_VERSION_PREFIX=true");
+  }
   return args;
 }
 
-function upsertProvider(name, type, credentialEnv, baseUrl, env = {}) {
-  const createArgs = buildProviderArgs("create", name, type, credentialEnv, baseUrl);
+function upsertProvider(name, type, credentialEnv, baseUrl, env = {}, stripVersionPrefix = false) {
+  const createArgs = buildProviderArgs("create", name, type, credentialEnv, baseUrl, stripVersionPrefix);
   const runOpts = { ignoreError: true, env, stdio: ["ignore", "pipe", "pipe"] };
   const createResult = runOpenshell(createArgs, runOpts);
   if (createResult.status === 0) {
@@ -759,7 +774,7 @@ function upsertProvider(name, type, credentialEnv, baseUrl, env = {}) {
     return { ok: true };
   }
 
-  const updateArgs = buildProviderArgs("update", name, type, credentialEnv, baseUrl);
+  const updateArgs = buildProviderArgs("update", name, type, credentialEnv, baseUrl, stripVersionPrefix);
   const updateResult = runOpenshell(updateArgs, runOpts);
   if (updateResult.status !== 0) {
     const output =
@@ -1686,13 +1701,14 @@ function getNonInteractiveProvider() {
     "gemini",
     "ollama",
     "custom",
+    "datarobot",
     "nim-local",
     "vllm",
   ]);
   if (!validProviders.has(normalized)) {
     console.error(`  Unsupported NEMOCLAW_PROVIDER: ${providerKey}`);
     console.error(
-      "  Valid values: build, openai, anthropic, anthropicCompatible, gemini, ollama, custom, nim-local, vllm",
+      "  Valid values: build, openai, anthropic, anthropicCompatible, gemini, ollama, custom, datarobot, nim-local, vllm",
     );
     process.exit(1);
   }
@@ -2303,6 +2319,7 @@ async function setupNim(gpu) {
   options.push({ key: "build", label: "NVIDIA Endpoints" });
   options.push({ key: "openai", label: "OpenAI" });
   options.push({ key: "custom", label: "Other OpenAI-compatible endpoint" });
+  options.push({ key: "datarobot", label: "DataRobot" });
   options.push({ key: "anthropic", label: "Anthropic" });
   options.push({ key: "anthropicCompatible", label: "Other Anthropic-compatible endpoint" });
   options.push({ key: "gemini", label: "Google Gemini" });
@@ -2389,6 +2406,30 @@ async function setupNim(gpu) {
           endpointUrl = normalizeProviderBaseUrl(endpointInput, "openai");
           if (!endpointUrl) {
             console.error("  Endpoint URL is required for Other OpenAI-compatible endpoint.");
+            if (isNonInteractive()) {
+              process.exit(1);
+            }
+            console.log("");
+            continue selectionLoop;
+          }
+        } else if (selected.key === "datarobot") {
+          const endpointInput = isNonInteractive()
+            ? (process.env.DATAROBOT_ENDPOINT || process.env.NEMOCLAW_ENDPOINT_URL || "").trim()
+            : await prompt(
+                "  DataRobot LLM gateway URL (e.g., https://app.datarobot.com/api/v2/genai/llmgw): ",
+              );
+          const navigation = getNavigationChoice(endpointInput);
+          if (navigation === "back") {
+            console.log("  Returning to provider selection.");
+            console.log("");
+            continue selectionLoop;
+          }
+          if (navigation === "exit") {
+            exitOnboardFromPrompt();
+          }
+          endpointUrl = normalizeProviderBaseUrl(endpointInput, "openai");
+          if (!endpointUrl) {
+            console.error("  Endpoint URL is required for DataRobot.");
             if (isNonInteractive()) {
               process.exit(1);
             }
@@ -2876,6 +2917,7 @@ async function setupInference(
         resolvedCredentialEnv,
         resolvedEndpointUrl,
         env,
+        config.stripVersionPrefix || false,
       );
       if (!providerResult.ok) {
         console.error(`  ${providerResult.message}`);
