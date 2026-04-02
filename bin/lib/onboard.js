@@ -1993,6 +1993,10 @@ async function startGatewayForRecovery(_gpu) {
 
 function getGatewayStartEnv() {
   const gatewayEnv = {};
+  if (process.env.OPENSHELL_CLUSTER_IMAGE) {
+    gatewayEnv.OPENSHELL_CLUSTER_IMAGE = process.env.OPENSHELL_CLUSTER_IMAGE;
+    return gatewayEnv;
+  }
   const openshellVersion = getInstalledOpenshellVersion();
   const stableGatewayImage = openshellVersion
     ? `ghcr.io/nvidia/openshell/cluster:${openshellVersion}`
