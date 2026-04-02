@@ -174,6 +174,7 @@ const REMOTE_PROVIDER_CONFIG = {
     defaultModel: "",
     skipVerify: true,
     stripVersionPrefix: true,
+    preferredApi: "openai-completions",
   },
 };
 
@@ -2540,7 +2541,7 @@ async function setupNim(gpu) {
               continue selectionLoop;
             }
 
-            if (selected.key === "custom") {
+            if (selected.key === "custom" || selected.key === "datarobot") {
               const validation = await validateCustomOpenAiLikeSelection(
                 remoteConfig.label,
                 endpointUrl,
@@ -2549,7 +2550,7 @@ async function setupNim(gpu) {
                 remoteConfig.helpUrl,
               );
               if (validation.ok) {
-                preferredInferenceApi = validation.api;
+                preferredInferenceApi = remoteConfig.preferredApi || validation.api;
                 break;
               }
               if (
@@ -2905,7 +2906,8 @@ async function setupInference(
     provider === "anthropic-prod" ||
     provider === "compatible-anthropic-endpoint" ||
     provider === "gemini-api" ||
-    provider === "compatible-endpoint"
+    provider === "compatible-endpoint" ||
+    provider === "datarobot-endpoint"
   ) {
     const config =
       provider === "nvidia-nim"
