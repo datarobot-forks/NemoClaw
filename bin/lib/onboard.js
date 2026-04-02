@@ -167,7 +167,7 @@ const REMOTE_PROVIDER_CONFIG = {
     label: "DataRobot",
     providerName: "datarobot-endpoint",
     providerType: "openai",
-    credentialEnv: "DATAROBOT_API_KEY",
+    credentialEnv: "DATAROBOT_API_TOKEN",
     endpointUrl: "",
     helpUrl: null,
     modelMode: "input",
